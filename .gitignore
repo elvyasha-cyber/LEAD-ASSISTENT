@@ -1,0 +1,44 @@
+# Секреты (ключи) - никогда не коммитить
+.env
+.env.local
+.env.*.local
+
+# Виртуальное окружение Python
+.venv/
+venv/
+env/
+ENV/
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+build/
+dist/
+
+# Логи и временные файлы
+*.log
+Журнал_анонимизации.csv
+logs/
+
+# История диалога (служебные файлы)
+history*.md
+history*.docx
+make_changes_docx.py
+make_hw.py
+opencode-vscode-install.md
+
+# Тестовые скрипты
+tools/test_anonym_log.py
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Системное
+.DS_Store
+Thumbs.db

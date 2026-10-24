@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LEAD-ASSISTENT - обработка входящих заявок</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --card: #ffffff;
+    --text: #1c2430;
+    --muted: #6b7787;
+    --line: #e3e8ef;
+    --accent: #2f6feb;
+    --accent-dark: #1f57c4;
+    --green: #1f8a54;
+    --green-bg: #e6f5ec;
+    --red: #c0392b;
+    --red-bg: #fdecea;
+    --amber: #a8690b;
+    --amber-bg: #fdf3e2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .page { max-width: 960px; margin: 0 auto; padding: 28px 20px 48px; }
+  .topbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: .5px; }
+  .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .status { border-radius: 999px; padding: 7px 14px; font-size: 13px; border: 1px solid var(--line); background: #fff; }
+  .status--loading { color: var(--muted); }
+  .status--ok { color: var(--green); background: var(--green-bg); border-color: #cbe8d8; }
+  .status--warn { color: var(--amber); background: var(--amber-bg); border-color: #f0dcb8; }
+  .status--error { color: var(--red); background: var(--red-bg); border-color: #f5cdc8; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(20, 30, 50, .04); }
+  .card__title { margin: 0 0 14px; font-size: 17px; }
+  .card__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .card__meta { color: var(--muted); font-size: 13px; }
+  .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group--full { grid-column: 1 / -1; }
+  .form-label { color: var(--muted); font-size: 13px; }
+  .form-hint { color: var(--muted); font-size: 12.5px; }
+  .form-input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px;
+    font: inherit; color: var(--text); background: #fbfcfe;
+  }
+  .form-input:focus { outline: 2px solid rgba(47, 111, 235, .35); border-color: var(--accent); background: #fff; }
+  .form-input--error { border-color: var(--red); background: var(--red-bg); }
+  .form-input--error:focus { outline-color: rgba(192, 57, 43, .35); border-color: var(--red); }
+  textarea {
+    width: 100%; min-height: 150px; resize: vertical; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 10px; font: inherit; color: var(--text); background: #fbfcfe;
+  }
+  textarea:focus { outline: 2px solid rgba(47, 111, 235, .35); border-color: var(--accent); background: #fff; }
+  .samples { margin-top: 16px; }
+  .samples__label { display: block; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  .samples__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .btn { font: inherit; border-radius: 9px; padding: 9px 16px; cursor: pointer; border: 1px solid var(--line); background: #fff; color: var(--text); transition: background .15s, border-color .15s; }
+  .btn:hover:not(:disabled) { background: #f2f5fa; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn--primary:hover:not(:disabled) { background: var(--accent-dark); }
+  .btn--sample { font-size: 13.5px; padding: 7px 13px; }
+  .loader { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: var(--muted); }
+  .spinner { width: 18px; height: 18px; border: 3px solid #dbe3ef; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .alert { border: 1px solid #f5cdc8; background: var(--red-bg); color: #7d241a; border-radius: 14px; padding: 16px 18px; margin-bottom: 18px; }
+  .alert__title { font-weight: 600; margin-bottom: 4px; }
+  .alert__text { font-size: 14px; }
+  .alert__details { margin-top: 10px; font-size: 13px; }
+  .alert__details pre { white-space: pre-wrap; word-break: break-word; background: #fff; border: 1px solid #f0d6d2; border-radius: 8px; padding: 10px; margin: 8px 0 0; font-size: 12.5px; }
+  .done {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding: 10px 14px;
+    border: 1px solid #cbe8d8; border-radius: 10px; background: var(--green-bg);
+    color: var(--green); font-weight: 600; font-size: 14px;
+  }
+  .done[hidden] { display: none; }
+  .fields { display: grid; gap: 14px; }
+  .field { border-top: 1px solid var(--line); padding-top: 12px; }
+  .field:first-child { border-top: none; padding-top: 0; }
+  .field__label { color: var(--muted); font-size: 13px; margin-bottom: 4px; }
+  .field__value { white-space: pre-wrap; word-break: break-word; }
+  .field__value--empty { color: var(--muted); font-style: italic; }
+  .field ul { margin: 0; padding-left: 20px; }
+  .field li { margin-bottom: 3px; }
+  .badge { display: inline-block; border-radius: 999px; padding: 4px 12px; font-size: 13.5px; font-weight: 600; }
+  .badge--target { color: var(--green); background: var(--green-bg); }
+  .badge--nontarget { color: var(--red); background: var(--red-bg); }
+  .badge--unknown { color: var(--amber); background: var(--amber-bg); }
+  .badge--yes { color: var(--red); background: var(--red-bg); }
+  .badge--no { color: var(--green); background: var(--green-bg); }
+  .footer { color: var(--muted); font-size: 12.5px; text-align: center; margin-top: 26px; }
+  @media (max-width: 720px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div>
+      <h1>LEAD-ASSISTENT</h1>
+      <p class="subtitle">Первичная обработка входящих заявок с помощью GigaChat</p>
+    </div>
+    <div id="apiStatus" class="status status--loading">Проверяем подключение...</div>
+  </header>
+
+  <section class="card">
+    <h2 class="card__title">Форма обращения</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label" for="contactName">Имя</label>
+        <input id="contactName" class="form-input" type="text" autocomplete="name" placeholder="Иван Иванов">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="contactPhone">Телефон</label>
+        <input id="contactPhone" class="form-input" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 (XXX) XXX-XX-XX">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="contactEmail">E-mail</label>
+        <input id="contactEmail" class="form-input" type="email" autocomplete="email" inputmode="email" placeholder="name@example.ru">
+      </div>
+      <div class="form-group form-group--full">
+        <label class="form-label" for="leadText">Текст заявки</label>
+        <textarea id="leadText" placeholder="Опишите суть обращения: что нужно, когда, детали заявки."></textarea>
+      </div>
+    </div>
+    <p class="form-hint">Обязательно заполните текст заявки и хотя бы одно поле контакта - имя, телефон или e-mail.</p>
+
+    <div class="samples">
+      <span class="samples__label">Подставить тестовую заявку:</span>
+      <div id="sampleButtons" class="samples__buttons"></div>
+    </div>
+
+    <div class="actions">
+      <button id="submitBtn" class="btn btn--primary" type="button">Обработать</button>
+      <button id="downloadBtn" class="btn" type="button" disabled>Скачать результат</button>
+      <button id="clearBtn" class="btn" type="button">Очистить</button>
+    </div>
+
+    <div id="loader" class="loader" hidden>
+      <span class="spinner"></span>
+      <span>Обрабатываем заявку... <span id="elapsed">0</span> с</span>
+    </div>
+  </section>
+
+  <section id="errorBox" class="alert" hidden>
+    <div class="alert__title">Не удалось обработать заявку</div>
+    <div class="alert__text" id="errorText"></div>
+    <details class="alert__details">
+      <summary>Подробнее</summary>
+      <pre id="errorDetail"></pre>
+    </details>
+  </section>
+
+  <section id="resultCard" class="card" hidden>
+    <div class="card__head">
+      <h2 class="card__title">Результат обработки</h2>
+      <span class="card__meta" id="resultMeta"></span>
+    </div>
+    <div class="done" id="doneLine" hidden></div>
+    <div id="resultFields" class="fields"></div>
+  </section>
+
+  <p class="footer">Все данные в проекте синтетические. Ключ GigaChat хранится на сервере в файле .env и не передаётся в браузер.</p>
+</div>
+
+<script>
+(function () {
+  var contactName = document.getElementById("contactName");
+  var contactPhone = document.getElementById("contactPhone");
+  var contactEmail = document.getElementById("contactEmail");
+  var textArea = document.getElementById("leadText");
+  var submitBtn = document.getElementById("submitBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var loader = document.getElementById("loader");
+  var elapsedEl = document.getElementById("elapsed");
+  var errorBox = document.getElementById("errorBox");
+  var errorText = document.getElementById("errorText");
+  var errorDetail = document.getElementById("errorDetail");
+  var resultCard = document.getElementById("resultCard");
+  var resultFields = document.getElementById("resultFields");
+  var resultMeta = document.getElementById("resultMeta");
+  var doneLine = document.getElementById("doneLine");
+  var apiStatus = document.getElementById("apiStatus");
+  var sampleButtons = document.getElementById("sampleButtons");
+  var downloadBtn = document.getElementById("downloadBtn");
+
+  // Сохранение в браузере: заполненная форма и последний разбор.
+  // localStorage может быть недоступен (приватный режим) - тогда всё просто не сохраняется.
+  var LS_TEXT = "la.leadText";
+  var LS_RESULT = "la.lastResult";
+  var LS_CONTACTS = "la.contacts";
+  var LS_SENT = "la.sentText";
+
+  function setStatus(cls, text, title) {
+    apiStatus.className = "status " + cls;
+    apiStatus.textContent = text;
+    apiStatus.title = title || "";
+  }
+
+  function loadStatus() {
+    fetch("/api/health")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.key_configured) {
+          setStatus("status--ok", "GigaChat: ключ найден (" + d.model + ")", d.message);
+        } else {
+          setStatus("status--warn", "GigaChat: ключ не задан", d.message);
+        }
+      })
+      .catch(function () {
+        setStatus("status--error", "Сервер недоступен", "Не удалось получить ответ от сервера приложения.");
+      });
+  }
+
+  function loadSamples() {
+    fetch("/api/samples")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        (d.samples || []).forEach(function (s) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn btn--sample";
+          btn.textContent = s.title;
+          if (s.hint) { btn.title = s.hint; }
+          btn.addEventListener("click", function () {
+            contactName.value = s.name || "";
+            contactPhone.value = s.phone || "";
+            contactEmail.value = s.email || "";
+            textArea.value = s.text;
+            clearFieldErrors();
+            hideError();
+            saveForm();
+            textArea.focus();
+          });
+          sampleButtons.appendChild(btn);
+        });
+      })
+      .catch(function () {
+        sampleButtons.textContent = "Не удалось загрузить тестовые заявки.";
+      });
+  }
+
+  function showError(message, detail) {
+    errorText.textContent = message;
+    errorDetail.textContent = detail || "";
+    errorBox.hidden = false;
+    errorBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function hideError() { errorBox.hidden = true; }
+
+  function storageGet(key) {
+    try { return window.localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function storageSet(key, value) {
+    try { window.localStorage.setItem(key, value); } catch (e) { /* не сохраняем */ }
+  }
+
+  function storageRemove(key) {
+    try { window.localStorage.removeItem(key); } catch (e) { /* не удаляем */ }
+  }
+
+  var textSaveTimer = null;
+  function scheduleTextSave() {
+    if (textSaveTimer) { clearTimeout(textSaveTimer); }
+    textSaveTimer = setTimeout(function () {
+      saveForm();
+    }, 300);
+  }
+
+  function saveForm() {
+    storageSet(LS_TEXT, textArea.value);
+    storageSet(LS_CONTACTS, JSON.stringify({
+      name: contactName.value,
+      phone: contactPhone.value,
+      email: contactEmail.value
+    }));
+  }
+
+  function fieldIsFilled(el) { return !!el.value.trim(); }
+
+  function clearFieldErrors() {
+    [contactName, contactPhone, contactEmail, textArea].forEach(function (el) {
+      el.classList.remove("form-input--error");
+      el.removeAttribute("aria-invalid");
+    });
+  }
+
+  function markFieldError(el) {
+    el.classList.add("form-input--error");
+    el.setAttribute("aria-invalid", "true");
+  }
+
+  function validateForm() {
+    clearFieldErrors();
+    var hasText = fieldIsFilled(textArea);
+    var hasContact = fieldIsFilled(contactName) || fieldIsFilled(contactPhone) || fieldIsFilled(contactEmail);
+
+    if (!hasText || !hasContact) {
+      var missing = [];
+      if (!hasText) { missing.push("текст заявки"); markFieldError(textArea); }
+      if (!hasContact) {
+        missing.push("ни одного поля контакта");
+        [contactName, contactPhone, contactEmail].forEach(markFieldError);
+      }
+      var detail = "Не заполнено: " + missing.join(" и ") + ". " +
+        "Укажите текст обращения и хотя бы один способ связи: имя, телефон или e-mail.";
+      return {
+        ok: false,
+        message: "Заполните хотя бы одно поле контакта и текст заявки.",
+        detail: detail
+      };
+    }
+
+    var email = contactEmail.value.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      markFieldError(contactEmail);
+      return {
+        ok: false,
+        message: "Проверьте e-mail.",
+        detail: "Адрес «" + email + "» выглядит неправильно. Пример: name@example.ru"
+      };
+    }
+
+    var phone = contactPhone.value.trim();
+    if (phone && phone.replace(/\D/g, "").length < 6) {
+      markFieldError(contactPhone);
+      return {
+        ok: false,
+        message: "Проверьте телефон.",
+        detail: "В номере «" + phone + "» слишком мало цифр. Пример: +7 (900) 123-45-67"
+      };
+    }
+
+    return { ok: true };
+  }
+
+  function composeLeadText() {
+    var lines = [];
+    var name = contactName.value.trim();
+    var phone = contactPhone.value.trim();
+    var email = contactEmail.value.trim();
+    if (name) { lines.push("Имя: " + name); }
+    if (phone) { lines.push("Телефон: " + phone); }
+    if (email) { lines.push("E-mail: " + email); }
+    if (lines.length) { lines.push(""); }
+    lines.push("Текст заявки:");
+    lines.push(textArea.value.trim());
+    return lines.join("\n");
+  }
+
+  function setLoading(on) {
+    loader.hidden = !on;
+    submitBtn.disabled = on;
+    if (on) { elapsedEl.textContent = "0"; }
+  }
+
+  function clearResult() {
+    resultCard.hidden = true;
+    resultFields.innerHTML = "";
+    doneLine.hidden = true;
+    resultMeta.textContent = "";
+    downloadBtn.disabled = true;
+  }
+
+  function badgeForLeadType(value) {
+    var span = document.createElement("span");
+    span.className = "badge";
+    var v = String(value || "").toLowerCase();
+    if (v === "целевой") { span.classList.add("badge--target"); }
+    else if (v === "нецелевой") { span.classList.add("badge--nontarget"); }
+    else { span.classList.add("badge--unknown"); }
+    span.textContent = value || "не указано";
+    return span;
+  }
+
+  function badgeForBool(value) {
+    var span = document.createElement("span");
+    span.className = "badge " + (value ? "badge--yes" : "badge--no");
+    span.textContent = value ? "Да" : "Нет";
+    return span;
+  }
+
+  function emptyListText(spec, ctx) {
+    var human = !!(ctx && ctx.needs_human);
+    if (spec.key === "missing_data") {
+      return human ? "не требуется: заявка передана человеку" : "все ключевые данные есть";
+    }
+    if (spec.key === "clarifying_questions") {
+      return human ? "не задаются: заявка передана человеку" : "не нужны: данных достаточно";
+    }
+    if (spec.key === "key_data") {
+      return "в заявке нет структурированных данных";
+    }
+    return "ничего не выявлено";
+  }
+
+  function addField(parent, spec, value, ctx) {
+    var field = document.createElement("div");
+    field.className = "field";
+
+    var label = document.createElement("div");
+    label.className = "field__label";
+    label.textContent = spec.label;
+    field.appendChild(label);
+
+    var box = document.createElement("div");
+    box.className = "field__value";
+
+    if (spec.type === "badge") {
+      box.appendChild(badgeForLeadType(value));
+    } else if (spec.type === "bool") {
+      box.appendChild(badgeForBool(value));
+    } else if (spec.type === "list") {
+      var items = Array.isArray(value) ? value : [];
+      if (items.length === 0) {
+        box.className = "field__value field__value--empty";
+        box.textContent = emptyListText(spec, ctx);
+      } else {
+        var ul = document.createElement("ul");
+        items.forEach(function (item) {
+          var li = document.createElement("li");
+          li.textContent = item;
+          ul.appendChild(li);
+        });
+        box.appendChild(ul);
+      }
+    } else {
+      var text = (value === null || value === undefined) ? "" : String(value);
+      if (!text.trim()) {
+        box.className = "field__value field__value--empty";
+        box.textContent = "не указано";
+      } else {
+        box.textContent = text;
+      }
+    }
+
+    field.appendChild(box);
+    parent.appendChild(field);
+  }
+
+  function renderResult(data, restored) {
+    var result = data.result || {};
+    var fields = data.fields || [];
+    resultFields.innerHTML = "";
+    var ctx = { needs_human: !!(result && result.needs_human) };
+    fields.forEach(function (spec) {
+      addField(resultFields, spec, result[spec.key], ctx);
+    });
+    var seconds = (typeof data.elapsed_seconds === "number") ? data.elapsed_seconds : null;
+    var meta = seconds === null ? "" : ("обработано за " + seconds + " с");
+    if (restored) { meta = meta ? (meta + " \u00b7 восстановлено из сохранения") : "восстановлено из сохранения"; }
+    resultMeta.textContent = meta;
+    doneLine.textContent = seconds === null
+      ? "Обработка завершена"
+      : "Обработка завершена за " + seconds + " с";
+    doneLine.hidden = false;
+    resultCard.hidden = false;
+    downloadBtn.disabled = false;
+    if (!restored) {
+      storageSet(LS_RESULT, JSON.stringify({
+        result: result,
+        fields: fields,
+        elapsed_seconds: seconds
+      }));
+    }
+  }
+
+  function fieldValueToText(spec, value, ctx) {
+    if (spec.type === "list") {
+      var items = Array.isArray(value) ? value : [];
+      if (!items.length) { return emptyListText(spec, ctx); }
+      return items.map(function (item) { return "  - " + item; }).join("\n");
+    }
+    if (spec.type === "badge") { return String(value || "не указано"); }
+    if (spec.type === "bool") { return value ? "Да" : "Нет"; }
+    var text = (value === null || value === undefined) ? "" : String(value);
+    return text.trim() ? text : "не указано";
+  }
+
+  function buildResultText(data) {
+    var result = data.result || {};
+    var fields = data.fields || [];
+    var ctx = { needs_human: !!(result && result.needs_human) };
+    var lines = [];
+    lines.push("LEAD-ASSISTENT - разбор входящей заявки");
+    lines.push("Дата сохранения: " + new Date().toLocaleString("ru-RU"));
+    lines.push("");
+    lines.push("Контакты:");
+    lines.push("Имя: " + (contactName.value.trim() || "не указано"));
+    lines.push("Телефон: " + (contactPhone.value.trim() || "не указано"));
+    lines.push("E-mail: " + (contactEmail.value.trim() || "не указано"));
+    lines.push("");
+    fields.forEach(function (spec) {
+      lines.push(spec.label + ":");
+      lines.push(fieldValueToText(spec, result[spec.key], ctx));
+      lines.push("");
+    });
+    lines.push("Текст заявки:");
+    lines.push(storageGet(LS_SENT) || storageGet(LS_TEXT) || "");
+    lines.push("");
+    return lines.join("\n");
+  }
+
+  function downloadResult() {
+    var raw = storageGet(LS_RESULT);
+    if (!raw) {
+      showError("Нет результата для сохранения.", "Сначала обработайте заявку.");
+      return;
+    }
+    var data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      showError("Не удалось сохранить результат.", "Сохранённый результат не читается.");
+      return;
+    }
+    var fileName = "lead-assistent-" + fileStamp() + ".txt";
+    try {
+      var blob = new Blob(["\uFEFF" + buildResultText(data)], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    } catch (e) {
+      showError("Не удалось сохранить файл.", "Браузер запретил скачивание файла.");
+    }
+  }
+
+  function fileStamp() {
+    var d = new Date();
+    function pad(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      "-" + pad(d.getHours()) + pad(d.getMinutes());
+  }
+
+  function restoreSaved() {
+    var savedContacts = storageGet(LS_CONTACTS);
+    if (savedContacts) {
+      try {
+        var c = JSON.parse(savedContacts);
+        contactName.value = c.name || "";
+        contactPhone.value = c.phone || "";
+        contactEmail.value = c.email || "";
+      } catch (e) {
+        storageRemove(LS_CONTACTS);
+      }
+    }
+    var savedText = storageGet(LS_TEXT);
+    if (savedText) { textArea.value = savedText; }
+    var rawResult = storageGet(LS_RESULT);
+    if (!rawResult) { return; }
+    var data;
+    try {
+      data = JSON.parse(rawResult);
+    } catch (e) {
+      storageRemove(LS_RESULT);
+      return;
+    }
+    renderResult(data, true);
+  }
+
+  function analyze() {
+    var check = validateForm();
+    if (!check.ok) {
+      showError(check.message, check.detail);
+      var bad = document.querySelector(".form-input--error");
+      if (bad) { bad.focus(); }
+      return;
+    }
+    hideError();
+    clearResult();
+    setLoading(true);
+
+    var sentText = composeLeadText();
+    storageSet(LS_SENT, sentText);
+
+    var started = Date.now();
+    var timer = setInterval(function () {
+      elapsedEl.textContent = String(Math.round((Date.now() - started) / 1000));
+    }, 500);
+
+    fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: sentText })
+    })
+      .then(function (r) {
+        return r.json().catch(function () { return null; }).then(function (d) {
+          if (!r.ok) {
+            showError((d && d.error) || "Ошибка сервера.", (d && d.detail) || ("HTTP " + r.status));
+            return;
+          }
+          renderResult(d);
+        });
+      })
+      .catch(function () {
+        showError("Не удалось связаться с приложением.", "Проверьте, что сервер запущен, и обновите страницу.");
+      })
+      .then(function () {
+        clearInterval(timer);
+        setLoading(false);
+      });
+  }
+
+  submitBtn.addEventListener("click", analyze);
+  downloadBtn.addEventListener("click", downloadResult);
+  clearBtn.addEventListener("click", function () {
+    contactName.value = "";
+    contactPhone.value = "";
+    contactEmail.value = "";
+    textArea.value = "";
+    hideError();
+    clearFieldErrors();
+    clearResult();
+    storageRemove(LS_TEXT);
+    storageRemove(LS_RESULT);
+    storageRemove(LS_CONTACTS);
+    storageRemove(LS_SENT);
+    contactName.focus();
+  });
+  textArea.addEventListener("input", scheduleTextSave);
+  [contactName, contactPhone, contactEmail].forEach(function (el) {
+    el.addEventListener("input", scheduleTextSave);
+    el.addEventListener("input", function () {
+      el.classList.remove("form-input--error");
+      el.removeAttribute("aria-invalid");
+    });
+  });
+  textArea.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); analyze(); }
+  });
+
+  loadStatus();
+  loadSamples();
+  restoreSaved();
+})();
+</script>
+</body>
+</html>
